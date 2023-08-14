@@ -12,7 +12,9 @@
     "moduleResolution": "nodenext",
     "isolatedModules": true,
     "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "baseUrl": ".",
-    "declaration": true
+    "declaration": true,
+    "sourceMap": true
   }
 }
