@@ -1,0 +1,10 @@
+{
+  "name": "@snadi/core",
+  "license": "MIT",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "tsc && node --test dist"
+  }
+}
