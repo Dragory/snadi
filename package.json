@@ -7,6 +7,7 @@
   },
   "workspaces": [
     "packages/core",
-    "packages/knex"
+    "packages/knex",
+    "packages/alias"
   ]
 }

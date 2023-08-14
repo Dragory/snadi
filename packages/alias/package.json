@@ -1,0 +1,9 @@
+{
+  "name": "snadi",
+  "description": "Alias for @snadi/core",
+  "version": "0.0.1",
+  "main": "index.js",
+  "dependencies": {
+    "@snadi/core": "*"
+  }
+}
