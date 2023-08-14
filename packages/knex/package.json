@@ -1,0 +1,18 @@
+{
+  "name": "@snadi/knex",
+  "license": "MIT",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --test dist"
+  },
+  "peerDependencies": {
+    "@snadi/core": "*",
+    "knex": "*"
+  },
+  "devDependencies": {
+    "sqlite3": "^5.1.6"
+  }
+}
