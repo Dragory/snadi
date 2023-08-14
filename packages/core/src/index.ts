@@ -2,49 +2,67 @@ function isPromise(input: any): input is Promise<any> {
   return input instanceof Promise;
 }
 
-export type Mappable<T> = {
-  toEntity: (raw: any) => Promise<T>;
+export type Mappable = {
+  toEntity: (raw: any) => any;
 };
 
-export type MappableInputType<T extends Mappable<any>> = Parameters<T["toEntity"]>[0];
-export type MappableOutputType<T extends Mappable<any>> = Awaited<ReturnType<T["toEntity"]>>;
+export type MappableInputType<T extends Mappable> = Parameters<T["toEntity"]>[0];
+export type MappableOutputType<T extends Mappable> = Awaited<ReturnType<T["toEntity"]>>;
 
-export type Relationship<
-  LocalEntityDef extends EntityDefinition<any>,
-  OtherEntityDef extends EntityDefinition<any>
+export type BaseRelationship<
+  LocalEntityDef extends EntityDefinition,
+  OtherEntityDef extends EntityDefinition,
 > = {
   otherEntity: OtherEntityDef;
   load: (entities: Array<MappableOutputType<LocalEntityDef>>) => AsyncIterable<MappableInputType<OtherEntityDef>> | Promise<Iterable<MappableInputType<OtherEntityDef>>>;
-  attach: (otherEntities: Array<MappableOutputType<OtherEntityDef>>) => (entity: MappableOutputType<LocalEntityDef>) => MappableOutputType<OtherEntityDef> | Array<MappableOutputType<OtherEntityDef>> | null;
 };
 
-export type EntityDefinition<T> = Mappable<T>;
-
-type RelationsToLoad = {
-  [key: string]: Relationship<EntityDefinition<any>, EntityDefinition<any>> | [Relationship<EntityDefinition<any>, EntityDefinition<any>>, RelationsToLoad];
+export type ManyRelationship<
+  LocalEntityDef extends EntityDefinition,
+  OtherEntityDef extends EntityDefinition
+> = BaseRelationship<LocalEntityDef, OtherEntityDef> & {
+  attach: (otherEntities: Array<MappableOutputType<OtherEntityDef>>) => (entity: MappableOutputType<LocalEntityDef>) => Array<MappableOutputType<OtherEntityDef>>;
 };
 
-type WithLoadedRelations<Entity, Relations extends RelationsToLoad> = Entity & {
-  [K in keyof Relations]: Relations[K] extends [Relationship<any, any>, RelationsToLoad]
-      // [relationship, nested relations]
-      ? (
-          ReturnType<ReturnType<Relations[K][0]["attach"]>> extends any[]
-              // Relationship returns an array
-              ? Array<ReturnType<ReturnType<Relations[K][0]["attach"]>>[number] & WithLoadedRelations<ReturnType<ReturnType<Relations[K][0]["attach"]>>[number], Relations[K][1]>>
-              // Relationship returns an entity or null
-              : (ReturnType<ReturnType<Relations[K][0]["attach"]>> & WithLoadedRelations<ReturnType<ReturnType<Relations[K][0]["attach"]>>, Relations[K][1]>) | null
-          )
-      // Just relationship
-      : Relations[K] extends Relationship<any, any>
-          ? ReturnType<ReturnType<Relations[K]["attach"]>>
-          : never;
+export type OneRelationship<
+  LocalEntityDef extends EntityDefinition,
+  OtherEntityDef extends EntityDefinition
+> = BaseRelationship<LocalEntityDef, OtherEntityDef> & {
+  attach: (otherEntities: Array<MappableOutputType<OtherEntityDef>>) => (entity: MappableOutputType<LocalEntityDef>) => MappableOutputType<OtherEntityDef> | null;
 };
 
-export function mapToEntity<EntityDef extends EntityDefinition<any>>(entityDef: EntityDef, data: MappableInputType<EntityDef>) {
+export type EntityDefinition = Mappable;
+
+export type RelationsToLoad = {
+  [key: string]:
+    | ManyRelationship<EntityDefinition, EntityDefinition>
+    | [ManyRelationship<EntityDefinition, EntityDefinition>, RelationsToLoad]
+    | OneRelationship<EntityDefinition, EntityDefinition>
+    | [OneRelationship<EntityDefinition, EntityDefinition>, RelationsToLoad];
+};
+
+export type WithLoadedRelations<Entity, Relations extends RelationsToLoad> = Entity & {
+  [K in keyof Relations]:
+    Relations[K] extends [ManyRelationship<any, any>, RelationsToLoad]
+      // [ManyRelationship, nested relations]
+      ? Array<MappableOutputType<Relations[K][0]["otherEntity"]> & WithLoadedRelations<MappableOutputType<Relations[K][0]["otherEntity"]>, Relations[K][1]>>
+      // Just ManyRelationship
+      : Relations[K] extends ManyRelationship<any, any>
+        ? Array<MappableOutputType<Relations[K]["otherEntity"]>>
+        // [OneRelationship, nested relations]
+        : Relations[K] extends [OneRelationship<any, any>, RelationsToLoad]
+          ? (MappableOutputType<Relations[K][0]["otherEntity"]> & WithLoadedRelations<MappableOutputType<Relations[K][0]["otherEntity"]>, Relations[K][1]>) | null
+          // Just OneRelationship
+          : Relations[K] extends OneRelationship<any, any>
+            ? MappableOutputType<Relations[K]["otherEntity"]> | null
+            : never;
+};
+
+export function mapToEntity<EntityDef extends EntityDefinition>(entityDef: EntityDef, data: MappableInputType<EntityDef>) {
   return entityDef.toEntity(data);
 }
 
-export async function mapArrayToEntity<EntityDef extends EntityDefinition<any>>(entityDef: EntityDef, arr: AsyncIterable<MappableInputType<EntityDef>> | Iterable<MappableInputType<EntityDef>>) {
+export async function mapArrayToEntity<EntityDef extends EntityDefinition>(entityDef: EntityDef, arr: AsyncIterable<MappableInputType<EntityDef>> | Iterable<MappableInputType<EntityDef>>) {
   const result: Array<MappableOutputType<EntityDef>> = [];
   for await (const data of arr) {
       result.push(await entityDef.toEntity(data));

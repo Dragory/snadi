@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
-import { EntityDefinition, Relationship, loadRelationsForArray, mapArrayToEntity } from "./index.js";
+import { EntityDefinition, ManyRelationship, OneRelationship, loadRelationsForArray, mapArrayToEntity } from "./index.js";
 
 // ENTITY: BOOKSTORE
 
@@ -10,7 +10,7 @@ type Bookstore = {
 
 const bookstoreEntityDef = {
   toEntity: async (data: Bookstore) => ({ ...data }),
-} satisfies EntityDefinition<Bookstore>;
+} satisfies EntityDefinition;
 
 const rawBookstores = [
   { name: "Ye Olde Book Shoppe" },
@@ -26,7 +26,7 @@ const bookstoreBooks = () => ({
           return books.filter(b => b.bookstoreName === bookstore.name);
       };
   },
-} satisfies Relationship<typeof bookstoreEntityDef, typeof bookEntityDef>);
+} satisfies ManyRelationship<typeof bookstoreEntityDef, typeof bookEntityDef>);
 
 // ENTITY: BOOK
 
@@ -38,7 +38,7 @@ type Book = {
 
 const bookEntityDef = {
   toEntity: async (data: Book) => ({ ...data }),
-} satisfies EntityDefinition<Book>;
+} satisfies EntityDefinition;
 
 const rawBooks = [
   { title: "Fragile Things", authorName: "Neil Gaiman", bookstoreName: "Brigitte's Books" },
@@ -54,7 +54,7 @@ const bookAuthor = () => ({
   attach:
     (authors) =>
       (book) => authors.find(a => a.name === book.authorName) ?? null,
-} satisfies Relationship<typeof bookEntityDef, typeof authorEntityDef>);
+} satisfies OneRelationship<typeof bookEntityDef, typeof authorEntityDef>);
 
 // 1:1 book->book details
 const bookBookDetails = () => ({
@@ -63,7 +63,7 @@ const bookBookDetails = () => ({
   attach:
     (bookDetails) =>
       (book) => bookDetails.find(bd => bd.bookTitle === book.title) ?? null,
-} satisfies Relationship<typeof bookEntityDef, typeof bookDetailsEntityDef>);
+} satisfies OneRelationship<typeof bookEntityDef, typeof bookDetailsEntityDef>);
 
 // ENTITY: BOOK DETAILS
 
@@ -74,7 +74,7 @@ type BookDetails = {
 
 const bookDetailsEntityDef = {
   toEntity: async (data: BookDetails) => ({ ...data }),
-} satisfies EntityDefinition<BookDetails>;
+} satisfies EntityDefinition;
 
 const rawBookDetails = [
   { bookTitle: "Fragile Things", isbn: "0-06-051522-8" },
@@ -89,7 +89,7 @@ type Author = {
 
 const authorEntityDef = {
   toEntity: async (data: Author) => ({ ...data }),
-} satisfies EntityDefinition<Author>;
+} satisfies EntityDefinition;
 
 const rawAuthors = [
   { name: "Neil Gaiman" },
@@ -102,7 +102,7 @@ const authorBooks = () => ({
   attach:
     (books) =>
       (author) => books.filter(b => b.authorName === author.name),
-} satisfies Relationship<typeof authorEntityDef, typeof bookEntityDef>);
+} satisfies ManyRelationship<typeof authorEntityDef, typeof bookEntityDef>);
 
 // TEST CASES
 
