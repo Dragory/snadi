@@ -63,6 +63,7 @@ test("tests", async (t) => {
     tableName: "bookstores",
     primaryKey: "id",
     toEntity: (data: any) => toEntityClass(Bookstore, data),
+    toRow: (data: Partial<Bookstore>) => data,
   } satisfies KnexEntityDefinition;
 
   const bookstoreBooks = () => hasMany(bookstoreDef, "id", bookDef, "bookstore_id");
@@ -78,6 +79,7 @@ test("tests", async (t) => {
     tableName: "books",
     primaryKey: "id",
     toEntity: (data: any) => toEntityClass(Book, data),
+    toRow: (data: Partial<Book>) => data,
   } satisfies KnexEntityDefinition;
 
   const bookBookDetails = () => hasOne(bookDef, "id", bookDetailsDef, "book_id");
@@ -94,6 +96,7 @@ test("tests", async (t) => {
     tableName: "book_details",
     primaryKey: "id",
     toEntity: (data: any) => toEntityClass(BookDetails, data),
+    toRow: (data: Partial<BookDetails>) => data,
   } satisfies KnexEntityDefinition;
 
   class Author {
@@ -105,6 +108,7 @@ test("tests", async (t) => {
     tableName: "authors",
     primaryKey: "id",
     toEntity: (data: any) => toEntityClass(Author, data),
+    toRow: (data: Partial<Author>) => data,
   } satisfies KnexEntityDefinition;
 
   const authorBooks = () => hasMany(authorDef, "id", bookDef, "author_id");
@@ -387,5 +391,21 @@ test("tests", async (t) => {
     });
     assert.strictEqual(queries, 5);
     knexClient.off("query", listener);
+  });
+
+  await t.test("orm.update()", async (t) => {
+    await orm.update(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id), {
+      name: "Some books",
+    });
+
+    const changedEntity = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id).first());
+    assert.ok(changedEntity != null);
+    assert.strictEqual(changedEntity.name, "Some books");
+  });
+
+  await t.test("orm.delete()", async (t) => {
+    await orm.delete(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id));
+    const deletedEntity = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id).first());
+    assert.strictEqual(deletedEntity, null);
   });
 });
