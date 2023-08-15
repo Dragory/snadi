@@ -5,6 +5,7 @@
     ],
     "strict": true,
     "strictPropertyInitialization": true,
+    "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
     "incremental": true,
     "module": "esnext",
