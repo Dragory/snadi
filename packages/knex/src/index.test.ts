@@ -403,6 +403,13 @@ test("tests", async (t) => {
     assert.strictEqual(changedEntity.name, "Some books");
   });
 
+  await t.test("orm.transaction()", async (t) => {
+    const noBooksStore = await orm.transaction((trxOrm) => {
+      return trxOrm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id).first());
+    });
+    assert.strictEqual(noBooksStore!.id, createdBookstores.noBooks.id);
+  });
+
   await t.test("orm.delete()", async (t) => {
     await orm.delete(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id));
     const deletedEntity = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id).first());
