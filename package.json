@@ -8,6 +8,7 @@
   "workspaces": [
     "packages/core",
     "packages/knex",
-    "packages/alias"
+    "packages/alias",
+    "packages/kysely"
   ]
 }
