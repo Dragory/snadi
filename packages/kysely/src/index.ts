@@ -33,69 +33,46 @@ export class KyselyOrm<DB> {
     this.kysely = kysely;
   }
 
-  getAll<EntityDef extends ValidKyselyEntityDefinition<DB>>(entityDef: EntityDef): Promise<Array<MappableOutputType<EntityDef>>>;
-  getAll<EntityDef extends ValidKyselyEntityDefinition<DB>, Relations extends RelationsToLoad>(entityDef: EntityDef, relations: Relations): Promise<Array<WithLoadedRelations<MappableOutputType<EntityDef>, Relations>>>;
-  async getAll(entityDef: ValidKyselyEntityDefinition<DB>, relations?: RelationsToLoad) {
+  async getAll<
+    EntityDef extends ValidKyselyEntityDefinition<DB>,
+    Relations extends RelationsToLoad | undefined,
+  >(
+    entityDef: EntityDef,
+    relations?: Relations,
+  ) {
     return this.loadMany(
       entityDef,
       this.kysely.selectFrom(entityDef.tableName).selectAll().execute(),
-      relations as RelationsToLoad,
+      relations,
     );
   }
-
-  getMany<
+  async getMany<
     EntityDef extends ValidKyselyEntityDefinition<DB>,
-    QB extends SelectQueryBuilder<DB, EntityDef["tableName"], {}>,
+    Relations extends RelationsToLoad | undefined,
   >(
     entityDef: EntityDef,
-    builder: (qb: QB) => QB,
-  ): Promise<Array<MappableOutputType<EntityDef>>>;
-  getMany<
-    EntityDef extends ValidKyselyEntityDefinition<DB>,
-    QB extends SelectQueryBuilder<DB, EntityDef["tableName"], {}>,
-    Relations extends RelationsToLoad
-  >(
-    entityDef: EntityDef,
-    builder: (qb: QB) => QB,
-    relations: Relations
-  ): Promise<Array<WithLoadedRelations<MappableOutputType<EntityDef>, Relations>>>;
-  async getMany<QB extends SelectQueryBuilder<DB, keyof DB & string, {}>>(
-    entityDef: ValidKyselyEntityDefinition<DB>,
-    builder: (qb: QB) => QB,
-    relations?: RelationsToLoad,
+    builder: (qb: SelectQueryBuilder<DB, EntityDef["tableName"], {}>) => SelectQueryBuilder<DB, EntityDef["tableName"], {}>,
+    relations?: Relations,
   ) {
     return this.loadMany(
       entityDef,
-      builder(this.kysely.selectFrom(entityDef.tableName).selectAll(entityDef.tableName as any) as unknown as QB).execute(),
-      relations as RelationsToLoad,
+      builder(this.kysely.selectFrom(entityDef.tableName).selectAll(entityDef.tableName as any) as SelectQueryBuilder<DB, EntityDef["tableName"], {}>).execute(),
+      relations,
     );
   }
 
-  getOne<
+  async getOne<
     EntityDef extends ValidKyselyEntityDefinition<DB>,
-    QB extends SelectQueryBuilder<DB, EntityDef["tableName"], {}>,
+    Relations extends RelationsToLoad | undefined,
   >(
     entityDef: EntityDef,
-    builder: (qb: QB) => QB,
-  ): Promise<MappableOutputType<EntityDef> | null>;
-  getOne<
-    EntityDef extends ValidKyselyEntityDefinition<DB>,
-    QB extends SelectQueryBuilder<DB, EntityDef["tableName"], {}>,
-    Relations extends RelationsToLoad,
-  >(
-    entityDef: EntityDef,
-    builder: (qb: QB) => QB,
-    relations: Relations,
-  ): Promise<WithLoadedRelations<MappableOutputType<EntityDef>, Relations> | null>;
-  async getOne<QB extends SelectQueryBuilder<DB, keyof DB & string, {}>>(
-    entityDef: ValidKyselyEntityDefinition<DB>,
-    builder: (qb: QB) => QB,
-    relations?: RelationsToLoad,
+    builder: (qb: SelectQueryBuilder<DB, EntityDef["tableName"], {}>) => SelectQueryBuilder<DB, EntityDef["tableName"], {}>,
+    relations?: Relations,
   ) {
     return this.loadOne(
       entityDef,
-      builder(this.kysely.selectFrom(entityDef.tableName).selectAll(entityDef.tableName as any) as unknown as QB).executeTakeFirst(),
-      relations as RelationsToLoad,
+      builder(this.kysely.selectFrom(entityDef.tableName).selectAll(entityDef.tableName as any) as SelectQueryBuilder<DB, EntityDef["tableName"], {}>).executeTakeFirst(),
+      relations,
     );
   }
 
@@ -155,29 +132,14 @@ export class KyselyOrm<DB> {
     });
   }
 
-  loadOne<EntityDef extends ValidKyselyEntityDefinition<DB>>(
-    entityDef: EntityDef,
-    promise: Awaitable<MappableInputType<EntityDef> | null>,
-  ): Promise<MappableOutputType<EntityDef> | null>;
-  loadOne<EntityDef extends ValidKyselyEntityDefinition<DB>>(
-    entityDef: EntityDef,
-    promise: Awaitable<MappableInputType<EntityDef>>,
-  ): Promise<MappableOutputType<EntityDef>>;
-  loadOne<EntityDef extends ValidKyselyEntityDefinition<DB>, Relations extends RelationsToLoad>(
-    entityDef: EntityDef,
-    promise: Awaitable<MappableInputType<EntityDef> | null>,
-    relations: Relations,
-  ): Promise<WithLoadedRelations<MappableOutputType<EntityDef>, Relations> | null>;
-  loadOne<EntityDef extends ValidKyselyEntityDefinition<DB>, Relations extends RelationsToLoad>(
+  async loadOne<
+    EntityDef extends ValidKyselyEntityDefinition<DB>,
+    Relations extends RelationsToLoad | undefined,
+  >(
     entityDef: EntityDef,
     promise: Awaitable<MappableInputType<EntityDef>>,
-    relations: Relations,
-  ): Promise<WithLoadedRelations<MappableOutputType<EntityDef>, Relations>>;
-  async loadOne(
-    entityDef: ValidKyselyEntityDefinition<DB>,
-    promise: Awaitable<any>,
-    relations?: RelationsToLoad,
-  ) {
+    relations?: Relations,
+  ): Promise<WithLoadedRelations<MappableOutputType<EntityDef>, Relations> | null> {
     const row = await promise;
     if (Array.isArray(row)) {
       throw new Error("load function of loadOne() should return a single row, got an array instead");
@@ -189,26 +151,20 @@ export class KyselyOrm<DB> {
     return relations ? loadRelationsForEntity(entity, relations) : entity;
   }
 
-  loadMany<EntityDef extends ValidKyselyEntityDefinition<DB>>(
+  async loadMany<
+    EntityDef extends ValidKyselyEntityDefinition<DB>,
+    Relations extends RelationsToLoad | undefined,
+  >(
     entityDef: EntityDef,
     promise: Awaitable<Array<MappableInputType<EntityDef>>>,
-  ): Promise<Array<MappableOutputType<EntityDef>>>;
-  loadMany<EntityDef extends ValidKyselyEntityDefinition<DB>, Relations extends RelationsToLoad>(
-    entityDef: EntityDef,
-    promise: Awaitable<Array<MappableInputType<EntityDef>>>,
-    relations: RelationsToLoad,
-  ): Promise<Array<MappableOutputType<EntityDef>>>;
-  async loadMany(
-    entityDef: ValidKyselyEntityDefinition<DB>,
-    promise: Awaitable<any>,
-    relations?: RelationsToLoad,
-  ) {
+    relations?: Relations,
+  ): Promise<Array<WithLoadedRelations<MappableOutputType<EntityDef>, Relations>>> {
     const rows = await promise;
     if (! Array.isArray(rows)) {
       throw new Error("load function of loadMany() should return an array of rows, got a non-array instead");
     }
-    const entity = await mapArrayToEntity(entityDef, rows);
-    return relations ? loadRelationsForArray(entity, relations) : entity;
+    const entities = await mapArrayToEntity(entityDef, rows);
+    return relations ? loadRelationsForArray(entities, relations) : entities;
   }
 }
 
