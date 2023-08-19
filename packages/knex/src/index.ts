@@ -105,11 +105,11 @@ export class KnexOrm {
     await qb.delete();
   }
 
-  async transaction<T>(fn: (orm: KnexOrm) => T): Promise<T> {
+  async transaction<T>(fn: (orm: KnexOrm) => T, config?: Knex.TransactionConfig): Promise<T> {
     return this.knex.transaction(async (trx) => {
       const trxOrm = new KnexOrm(trx);
       return fn(trxOrm);
-    });
+    }, config);
   }
 
   qb<EntityDef extends KnexEntityDefinition>(entityDef: EntityDef): Knex.QueryBuilder {
