@@ -41,7 +41,7 @@ export type RelationsToLoad = {
     | [OneRelationship<EntityDefinition, EntityDefinition>, RelationsToLoad];
 };
 
-export type WithLoadedRelations<Entity, Relations extends RelationsToLoad> = Entity & {
+export type WithLoadedRelations<Entity, Relations extends RelationsToLoad | undefined> = Entity & {
   [K in keyof Relations]:
     Relations[K] extends [ManyRelationship<any, any>, RelationsToLoad]
       // [ManyRelationship, nested relations]
