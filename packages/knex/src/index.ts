@@ -1,9 +1,11 @@
-import { EntityDefinition, ManyRelationship, MappableOutputType, OneRelationship, RelationsToLoad, WithLoadedRelations, loadRelationsForArray, loadRelationsForEntity, mapArrayToEntity, mapToEntity } from "@snadi/core";
+import { EntityDefinition, ManyRelationship, MappableInputType, MappableOutputType, OneRelationship, RelationsToLoad, WithLoadedRelations, loadRelationsForArray, loadRelationsForEntity, mapArrayToEntity, mapToEntity } from "@snadi/core";
 import { Knex } from "knex";
 
 type Optional<T extends object> = {
   [K in keyof T]?: T[K];
 };
+
+type Awaitable<T> = T | Promise<T>;
 
 export type KnexEntityDefinition = EntityDefinition & {
   tableName: string;
@@ -26,58 +28,52 @@ export class KnexOrm {
   getAll<EntityDef extends KnexEntityDefinition>(entityDef: EntityDef): Promise<Array<MappableOutputType<EntityDef>>>;
   getAll<EntityDef extends KnexEntityDefinition, Relations extends RelationsToLoad>(entityDef: EntityDef, relations: Relations): Promise<Array<WithLoadedRelations<MappableOutputType<EntityDef>, Relations>>>;
   async getAll(entityDef: KnexEntityDefinition, relations?: RelationsToLoad) {
-    const rawResults = await this.knex(entityDef.tableName);
-    const entities = await mapArrayToEntity(entityDef, rawResults);
-    return relations ? loadRelationsForArray(entities, relations) : entities;
+    return this.loadMany(
+      entityDef,
+      this.knex(entityDef.tableName),
+      relations as RelationsToLoad,
+    );
   }
 
   getMany<EntityDef extends KnexEntityDefinition>(
     entityDef: EntityDef,
-    builder: (qb: Knex.QueryBuilder) => Awaited<any>,
+    builder: (qb: Knex.QueryBuilder) => Knex.QueryBuilder,
   ): Promise<Array<MappableOutputType<EntityDef>>>;
   getMany<EntityDef extends KnexEntityDefinition, Relations extends RelationsToLoad>(
     entityDef: EntityDef,
-    builder: (qb: Knex.QueryBuilder) => Awaited<any>,
+    builder: (qb: Knex.QueryBuilder) => Knex.QueryBuilder,
     relations: Relations
   ): Promise<Array<WithLoadedRelations<MappableOutputType<EntityDef>, Relations>>>;
-  async getMany(entityDef: KnexEntityDefinition, builder: (qb: Knex.QueryBuilder) => Awaited<any>, relations?: RelationsToLoad) {
-    const rawResults = await builder(this.knex(entityDef.tableName));
-    if (! Array.isArray(rawResults)) {
-      throw new Error(`builder for getMany() should return an array`);
-    }
-    if (rawResults.length === 0) {
-      return [];
-    }
-    const entities = await mapArrayToEntity(entityDef, rawResults);
-    return relations ? loadRelationsForArray(entities, relations) : entities;
+  async getMany(entityDef: KnexEntityDefinition, builder: (qb: Knex.QueryBuilder) => Knex.QueryBuilder, relations?: RelationsToLoad) {
+    return this.loadMany(
+      entityDef,
+      builder(this.knex(entityDef.tableName)),
+      relations as RelationsToLoad,
+    );
   }
 
   getOne<EntityDef extends KnexEntityDefinition>(
     entityDef: EntityDef,
-    builder: (qb: Knex.QueryBuilder) => Awaited<any>,
+    builder: (qb: Knex.QueryBuilder) => Knex.QueryBuilder,
   ): Promise<MappableOutputType<EntityDef> | null>;
   getOne<EntityDef extends KnexEntityDefinition, Relations extends RelationsToLoad>(
     entityDef: EntityDef,
-    builder: (qb: Knex.QueryBuilder) => Awaited<any>,
+    builder: (qb: Knex.QueryBuilder) => Knex.QueryBuilder,
     relations: Relations
   ): Promise<WithLoadedRelations<MappableOutputType<EntityDef>, Relations> | null>;
-  async getOne(entityDef: KnexEntityDefinition, builder: (qb: Knex.QueryBuilder) => Awaited<any>, relations?: RelationsToLoad) {
-    const rawResult = await builder(this.knex(entityDef.tableName));
-    if (Array.isArray(rawResult)) {
-      throw new Error(`builder for getOne() should return a single row`);
-    }
-    if (rawResult == null) {
-      return null;
-    }
-    const entity = await mapToEntity(entityDef, rawResult);
-    return relations ? loadRelationsForEntity(entity, relations) : entity;
+  async getOne(entityDef: KnexEntityDefinition, builder: (qb: Knex.QueryBuilder) => Knex.QueryBuilder, relations?: RelationsToLoad) {
+    return this.loadOne(
+      entityDef,
+      builder(this.knex(entityDef.tableName)).first(),
+      relations as RelationsToLoad,
+    );
   }
 
   async create<EntityDef extends KnexEntityDefinition>(entityDef: EntityDef, data: ToRowInput<EntityDef>): Promise<CreateResult<EntityDef>> {
     const dataToInsert = entityDef.toRow ? await entityDef.toRow(data) : data;
     const inserted = await this.knex(entityDef.tableName).insert(dataToInsert).returning(entityDef.primaryKey ?? "*");
     return (entityDef.primaryKey
-      ? this.getOne(entityDef, async qb => await qb.where("id", inserted[0][entityDef.primaryKey!]).first())
+      ? this.getOne(entityDef, qb => qb.where("id", inserted[0][entityDef.primaryKey!]))
       : null) as CreateResult<EntityDef>;
   }
 
@@ -103,6 +99,62 @@ export class KnexOrm {
   ): Promise<void> {
     const qb = builder(this.knex(entityDef.tableName));
     await qb.delete();
+  }
+
+  loadOne<EntityDef extends KnexEntityDefinition>(
+    entityDef: EntityDef,
+    promise: Awaitable<MappableInputType<EntityDef> | null>,
+  ): Promise<MappableOutputType<EntityDef> | null>;
+  loadOne<EntityDef extends KnexEntityDefinition>(
+    entityDef: EntityDef,
+    promise: Awaitable<MappableInputType<EntityDef>>,
+  ): Promise<MappableOutputType<EntityDef>>;
+  loadOne<EntityDef extends KnexEntityDefinition, Relations extends RelationsToLoad>(
+    entityDef: EntityDef,
+    promise: Awaitable<MappableInputType<EntityDef> | null>,
+    relations: Relations,
+  ): Promise<WithLoadedRelations<MappableOutputType<EntityDef>, Relations> | null>;
+  loadOne<EntityDef extends KnexEntityDefinition, Relations extends RelationsToLoad>(
+    entityDef: EntityDef,
+    promise: Awaitable<MappableInputType<EntityDef>>,
+    relations: Relations,
+  ): Promise<WithLoadedRelations<MappableOutputType<EntityDef>, Relations>>;
+  async loadOne(
+    entityDef: KnexEntityDefinition,
+    promise: Awaitable<any>,
+    relations?: RelationsToLoad,
+  ) {
+    const row = await promise;
+    if (Array.isArray(row)) {
+      throw new Error("load function of loadOne() should return a single row, got an array instead");
+    }
+    if (row == null) {
+      return null;
+    }
+    const entity = await mapToEntity(entityDef, row);
+    return relations ? loadRelationsForEntity(entity, relations) : entity;
+  }
+
+  loadMany<EntityDef extends KnexEntityDefinition>(
+    entityDef: EntityDef,
+    promise: Awaitable<Array<MappableInputType<EntityDef>>>,
+  ): Promise<Array<MappableOutputType<EntityDef>>>;
+  loadMany<EntityDef extends KnexEntityDefinition, Relations extends RelationsToLoad>(
+    entityDef: EntityDef,
+    promise: Awaitable<Array<MappableInputType<EntityDef>>>,
+    relations: RelationsToLoad,
+  ): Promise<Array<MappableOutputType<EntityDef>>>;
+  async loadMany(
+    entityDef: KnexEntityDefinition,
+    promise: Awaitable<any>,
+    relations?: RelationsToLoad,
+  ) {
+    const rows = await promise;
+    if (! Array.isArray(rows)) {
+      throw new Error("load function of loadMany() should return an array of rows, got a non-array instead");
+    }
+    const entity = await mapArrayToEntity(entityDef, rows);
+    return relations ? loadRelationsForArray(entity, relations) : entity;
   }
 
   async transaction<T>(fn: (orm: KnexOrm) => T, config?: Knex.TransactionConfig): Promise<T> {

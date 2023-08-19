@@ -211,7 +211,7 @@ test("tests", async (t) => {
     });
 
     await t.test("orm.getOne()", async (t) => {
-      const fragileThings = await orm.getOne(bookDef, qb => qb.where("id", createdBooks.fragileThings.id).first(), {
+      const fragileThings = await orm.getOne(bookDef, qb => qb.where("id", createdBooks.fragileThings.id), {
         details: bookBookDetails()(orm),
       });
       assert.ok(fragileThings instanceof Book);
@@ -252,7 +252,7 @@ test("tests", async (t) => {
     });
 
     await t.test("orm.getOne()", async (t) => {
-      const bookstore = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.brigittesBooks.id).first(), {
+      const bookstore = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.brigittesBooks.id), {
         books: bookstoreBooks()(orm),
       });
       assert.ok(bookstore instanceof Bookstore);
@@ -292,7 +292,7 @@ test("tests", async (t) => {
     });
 
     await t.test("orm.getOne()", async (t) => {
-      const book = await orm.getOne(bookDef, qb => qb.where("id", createdBooks.fragileThings.id).first(), {
+      const book = await orm.getOne(bookDef, qb => qb.where("id", createdBooks.fragileThings.id), {
         author: bookAuthor()(orm),
       });
       assert.ok(book instanceof Book);
@@ -354,7 +354,7 @@ test("tests", async (t) => {
     });
 
     await t.test("orm.getOne()", async (t) => {
-      const bookstore = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.brigittesBooks.id).first(), {
+      const bookstore = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.brigittesBooks.id), {
         books: [bookstoreBooks()(orm), {
           details: bookBookDetails()(orm),
           author: [bookAuthor()(orm), {
@@ -398,21 +398,21 @@ test("tests", async (t) => {
       name: "Some books",
     });
 
-    const changedEntity = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id).first());
+    const changedEntity = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id));
     assert.ok(changedEntity != null);
     assert.strictEqual(changedEntity.name, "Some books");
   });
 
   await t.test("orm.transaction()", async (t) => {
     const noBooksStore = await orm.transaction((trxOrm) => {
-      return trxOrm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id).first());
+      return trxOrm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id));
     });
     assert.strictEqual(noBooksStore!.id, createdBookstores.noBooks.id);
   });
 
   await t.test("orm.delete()", async (t) => {
     await orm.delete(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id));
-    const deletedEntity = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id).first());
+    const deletedEntity = await orm.getOne(bookstoreDef, qb => qb.where("id", createdBookstores.noBooks.id));
     assert.strictEqual(deletedEntity, null);
   });
 });
