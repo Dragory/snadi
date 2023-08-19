@@ -18,9 +18,9 @@ export type ValidKyselyEntityDefinition<DB> = KyselyEntityDefinition & {
   tableName: keyof DB & string;
 };
 
-type ToRowInput<EntityDef extends KyselyEntityDefinition> = EntityDef["toRow"] extends (data: any) => any ? Parameters<EntityDef["toRow"]>[0] : any;
+export type ToRowInput<EntityDef extends KyselyEntityDefinition> = EntityDef["toRow"] extends (data: any) => any ? Parameters<EntityDef["toRow"]>[0] : any;
 
-type CreateResult<EntityDef extends KyselyEntityDefinition> = EntityDef["primaryKey"] extends string ? MappableOutputType<EntityDef> : null;
+export type CreateResult<EntityDef extends KyselyEntityDefinition> = EntityDef["primaryKey"] extends string ? MappableOutputType<EntityDef> : null;
 
 export type EntitiesToKyselyDatabase<Entities extends KyselyEntityDefinition> = {
   [Entity in Entities as Entity["tableName"]]: MappableInputType<Entity>;
