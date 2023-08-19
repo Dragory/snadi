@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node --test dist"
+    "test": "tsc && node --test dist",
+    "publish": "npm run build && npm run test && npm publish --auth-type=legacy --access public"
   },
   "peerDependencies": {
     "@snadi/core": "*",
