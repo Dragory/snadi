@@ -1,32 +1,30 @@
 import { EntityDefinition, ManyRelationship, MappableInputType, MappableOutputType, OneRelationship, RelationsToLoad, WithLoadedRelations, loadRelationsForArray, loadRelationsForEntity, mapArrayToEntity, mapToEntity } from "@snadi/core";
-import { DeleteQueryBuilder, DeleteResult, Kysely, SelectQueryBuilder, TransactionBuilder, UpdateQueryBuilder, UpdateResult } from "kysely";
-
-type Optional<T extends object> = {
-  [K in keyof T]?: T[K];
-};
+import { DeleteQueryBuilder, DeleteResult, InsertQueryBuilder, InsertResult, Kysely, SelectQueryBuilder, TransactionBuilder, UpdateQueryBuilder, UpdateResult, sql } from "kysely";
 
 type Awaitable<T> = T | Promise<T>;
 
-export type KyselyEntityDefinition = EntityDefinition & {
+export type SnadiKyselyEntityDefinition = EntityDefinition & {
   tableName: string;
-  primaryKey?: string;
-
-  toRow?: (data: any) => any;
+  toInsert: (data: any) => Awaitable<any>;
+  toUpdate: (data: any) => Awaitable<any>;
 };
 
-export type ValidKyselyEntityDefinition<DB> = KyselyEntityDefinition & {
+export type ValidSnadiKyselyEntityDefinition<DB> = SnadiKyselyEntityDefinition & {
   tableName: keyof DB & string;
 };
 
-export type ToRowInput<EntityDef extends KyselyEntityDefinition> = EntityDef["toRow"] extends (data: any) => any ? Parameters<EntityDef["toRow"]>[0] : any;
+export type InsertInput<EntityDef extends SnadiKyselyEntityDefinition> = EntityDef["toInsert"] extends (data: infer I) => any ? I : never;
+export type UpdateInput<EntityDef extends SnadiKyselyEntityDefinition> = EntityDef["toUpdate"] extends (data: infer I) => any ? I : never;
 
-export type CreateResult<EntityDef extends KyselyEntityDefinition> = EntityDef["primaryKey"] extends string ? MappableOutputType<EntityDef> : null;
-
-export type EntitiesToKyselyDatabase<Entities extends KyselyEntityDefinition> = {
+export type EntitiesToKyselyDatabase<Entities extends SnadiKyselyEntityDefinition> = {
   [Entity in Entities as Entity["tableName"]]: MappableInputType<Entity>;
 };
 
-export class KyselyOrm<DB> {
+function asyncMap<T, O>(arr: T[], fn: (t: T) => O): Promise<O[]> {
+  return Promise.all(arr.map(fn));
+}
+
+export class SnadiKyselyOrm<DB> {
   kysely: Kysely<DB>;
 
   constructor(kysely: Kysely<DB>) {
@@ -34,7 +32,7 @@ export class KyselyOrm<DB> {
   }
 
   async getAll<
-    EntityDef extends ValidKyselyEntityDefinition<DB>,
+    EntityDef extends ValidSnadiKyselyEntityDefinition<DB>,
     Relations extends RelationsToLoad | undefined,
   >(
     entityDef: EntityDef,
@@ -47,7 +45,7 @@ export class KyselyOrm<DB> {
     );
   }
   async getMany<
-    EntityDef extends ValidKyselyEntityDefinition<DB>,
+    EntityDef extends ValidSnadiKyselyEntityDefinition<DB>,
     Relations extends RelationsToLoad | undefined,
   >(
     entityDef: EntityDef,
@@ -62,7 +60,7 @@ export class KyselyOrm<DB> {
   }
 
   async getOne<
-    EntityDef extends ValidKyselyEntityDefinition<DB>,
+    EntityDef extends ValidSnadiKyselyEntityDefinition<DB>,
     Relations extends RelationsToLoad | undefined,
   >(
     entityDef: EntityDef,
@@ -76,64 +74,57 @@ export class KyselyOrm<DB> {
     );
   }
 
-  async create<EntityDef extends ValidKyselyEntityDefinition<DB>>(
+  async insert<EntityDef extends ValidSnadiKyselyEntityDefinition<DB>>(
     entityDef: EntityDef,
-    data: ToRowInput<EntityDef>,
-  ): Promise<CreateResult<EntityDef>> {
-    const dataToInsert = entityDef.toRow ? await entityDef.toRow(data) : data;
-    const returning = entityDef.primaryKey ?? "*";
-    const inserted = await this.kysely
+    data: InsertInput<EntityDef> | Array<InsertInput<EntityDef>>,
+    builder?: (qb: InsertQueryBuilder<DB, EntityDef["tableName"], {}>) => InsertQueryBuilder<DB, EntityDef["tableName"], {}>,
+  ): Promise<InsertResult> {
+    const dataToInsert = Array.isArray(data)
+      ? await asyncMap(data, d => entityDef.toInsert(d))
+      : await entityDef.toInsert(data);
+    let query: InsertQueryBuilder<DB, string & keyof DB, any> = this.kysely
       .insertInto(entityDef.tableName)
-      .values(dataToInsert)
-      // See note: https://kysely-org.github.io/kysely-apidoc/classes/InsertQueryBuilder.html#returning
-      // Avoiding this bug: https://sqlite.org/forum/forumpost/033daf0b32
-      .returning(returning === "*" ? returning : `${returning} as ${returning}` as any)
-      .executeTakeFirst();
-    return (entityDef.primaryKey
-      ? this.getOne(entityDef, qb => qb.where(entityDef.primaryKey! as any, "=", inserted![entityDef.primaryKey!]))
-      : null) as CreateResult<EntityDef>;
-  }
-
-  async createMany<EntityDef extends ValidKyselyEntityDefinition<DB>>(entityDef: EntityDef, arr: Array<ToRowInput<EntityDef>>): Promise<void> {
-    const arrayToInsert = entityDef.toRow
-      ? await Promise.all(arr.map(data => entityDef.toRow!(data)))
-      : arr;
-    await this.kysely.insertInto(entityDef.tableName).values(arrayToInsert).execute();
+      .values(dataToInsert);
+    if (builder) {
+      query = builder(query);
+    }
+    return query.executeTakeFirst();
   }
 
   async update<
-    EntityDef extends ValidKyselyEntityDefinition<DB>,
+    EntityDef extends ValidSnadiKyselyEntityDefinition<DB>,
     QB extends UpdateQueryBuilder<DB, EntityDef["tableName"], EntityDef["tableName"], UpdateResult>,
   >(
     entityDef: EntityDef,
     builder: (qb: QB) => QB,
-    fieldsToUpdate: Optional<ToRowInput<EntityDef>>,
-  ): Promise<void> {
+    data: UpdateInput<EntityDef>,
+  ): Promise<UpdateResult> {
     const qb = builder(this.kysely.updateTable(entityDef.tableName) as unknown as QB);
-    await qb.set(fieldsToUpdate).execute();
+    const dataToUpdate = await entityDef.toUpdate(data);
+    return qb.set(dataToUpdate).executeTakeFirst();
   }
 
-  async delete<EntityDef extends ValidKyselyEntityDefinition<DB>>(
+  async delete<EntityDef extends ValidSnadiKyselyEntityDefinition<DB>>(
     entityDef: EntityDef,
     builder: (qb: DeleteQueryBuilder<DB, EntityDef["tableName"], DeleteResult>) => DeleteQueryBuilder<DB, EntityDef["tableName"], DeleteResult>,
-  ): Promise<void> {
+  ): Promise<DeleteResult> {
     const qb = builder(this.kysely.deleteFrom(entityDef.tableName) as DeleteQueryBuilder<DB, EntityDef["tableName"], DeleteResult>);
-    await qb.execute();
+    return qb.executeTakeFirst();
   }
 
   async transaction<T>(
-    fn: (orm: KyselyOrm<DB>) => T,
+    fn: (orm: SnadiKyselyOrm<DB>) => T,
     config?: (builder: TransactionBuilder<DB>) => TransactionBuilder<DB>,
   ): Promise<T> {
     const transaction = config ? config(this.kysely.transaction()) : this.kysely.transaction();
     return transaction.execute(async (trx) => {
-      const trxOrm = new KyselyOrm(trx);
+      const trxOrm = new SnadiKyselyOrm(trx);
       return fn(trxOrm);
     });
   }
 
   async loadOne<
-    EntityDef extends ValidKyselyEntityDefinition<DB>,
+    EntityDef extends ValidSnadiKyselyEntityDefinition<DB>,
     Relations extends RelationsToLoad | undefined,
   >(
     entityDef: EntityDef,
@@ -152,7 +143,7 @@ export class KyselyOrm<DB> {
   }
 
   async loadMany<
-    EntityDef extends ValidKyselyEntityDefinition<DB>,
+    EntityDef extends ValidSnadiKyselyEntityDefinition<DB>,
     Relations extends RelationsToLoad | undefined,
   >(
     entityDef: EntityDef,
@@ -168,19 +159,19 @@ export class KyselyOrm<DB> {
   }
 }
 
-export function createKyselyOrm<DB>(kysely: Kysely<DB>): KyselyOrm<DB> {
-  return new KyselyOrm(kysely);
+export function createKyselyOrm<DB>(kysely: Kysely<DB>): SnadiKyselyOrm<DB> {
+  return new SnadiKyselyOrm(kysely);
 }
 
 export function hasOne<
-  LocalEntityDef extends KyselyEntityDefinition,
-  OtherEntityDef extends KyselyEntityDefinition,
+  LocalEntityDef extends SnadiKyselyEntityDefinition,
+  OtherEntityDef extends SnadiKyselyEntityDefinition,
 >(
   localEntityDef: LocalEntityDef, // Just here for type hints
   localField: keyof MappableOutputType<LocalEntityDef>,
   otherEntityDef: OtherEntityDef,
   otherField: keyof MappableOutputType<OtherEntityDef>,
-): (orm: KyselyOrm<any>) => OneRelationship<LocalEntityDef, OtherEntityDef> {
+): (orm: SnadiKyselyOrm<any>) => OneRelationship<LocalEntityDef, OtherEntityDef> {
   return (orm) => {
     return {
       otherEntity: otherEntityDef,
@@ -209,14 +200,14 @@ export function hasOne<
 }
 
 export function hasMany<
-  LocalEntityDef extends KyselyEntityDefinition,
-  OtherEntityDef extends KyselyEntityDefinition,
+  LocalEntityDef extends SnadiKyselyEntityDefinition,
+  OtherEntityDef extends SnadiKyselyEntityDefinition,
 >(
   localEntityDef: LocalEntityDef, // Just here for type hints
   localField: keyof MappableOutputType<LocalEntityDef>,
   otherEntityDef: OtherEntityDef,
   otherField: keyof MappableOutputType<OtherEntityDef>,
-): (orm: KyselyOrm<any>) => ManyRelationship<LocalEntityDef, OtherEntityDef> {
+): (orm: SnadiKyselyOrm<any>) => ManyRelationship<LocalEntityDef, OtherEntityDef> {
   return (orm) => {
     return {
       otherEntity: otherEntityDef,

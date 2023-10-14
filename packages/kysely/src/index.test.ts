@@ -1,8 +1,8 @@
 import test, { after } from "node:test";
 import SQLite from "better-sqlite3";
-import { EntitiesToKyselyDatabase, KyselyEntityDefinition, createKyselyOrm, hasMany, hasOne } from "./index.js";
+import { EntitiesToKyselyDatabase, SnadiKyselyEntityDefinition, ValidSnadiKyselyEntityDefinition, createKyselyOrm, hasMany, hasOne } from "./index.js";
 import assert from "node:assert";
-import { Kysely, SqliteDialect } from "kysely";
+import { InsertResult, Kysely, SqliteDialect } from "kysely";
 
 test("tests", async (t) => {
   // ENTITIES
@@ -22,10 +22,10 @@ test("tests", async (t) => {
 
   const bookstoreDef = {
     tableName: "bookstores" as const,
-    primaryKey: "id",
     toEntity: (data: Bookstore) => toEntityClass(Bookstore, data),
-    toRow: (data: Partial<Bookstore>) => data,
-  } satisfies KyselyEntityDefinition;
+    toInsert: (data: Partial<Bookstore>) => data,
+    toUpdate: (data: Partial<Bookstore>) => data,
+  } satisfies SnadiKyselyEntityDefinition;
 
   const bookstoreBooks = () => hasMany(bookstoreDef, "id", bookDef, "bookstore_id");
 
@@ -38,10 +38,10 @@ test("tests", async (t) => {
 
   const bookDef = {
     tableName: "books" as const,
-    primaryKey: "id",
     toEntity: (data: Book) => toEntityClass(Book, data),
-    toRow: (data: Partial<Book>) => data,
-  } satisfies KyselyEntityDefinition;
+    toInsert: (data: Partial<Book>) => data,
+    toUpdate: (data: Partial<Book>) => data,
+  } satisfies SnadiKyselyEntityDefinition;
 
   const bookBookDetails = () => hasOne(bookDef, "id", bookDetailsDef, "book_id");
 
@@ -55,10 +55,10 @@ test("tests", async (t) => {
 
   const bookDetailsDef = {
     tableName: "book_details" as const,
-    primaryKey: "id",
     toEntity: (data: BookDetails) => toEntityClass(BookDetails, data),
-    toRow: (data: Partial<BookDetails>) => data,
-  } satisfies KyselyEntityDefinition;
+    toInsert: (data: Partial<BookDetails>) => data,
+    toUpdate: (data: Partial<BookDetails>) => data,
+  } satisfies SnadiKyselyEntityDefinition;
 
   class Author {
     declare id: number;
@@ -67,10 +67,10 @@ test("tests", async (t) => {
 
   const authorDef = {
     tableName: "authors" as const,
-    primaryKey: "id",
     toEntity: (data: Author) => toEntityClass(Author, data),
-    toRow: (data: Partial<Author>) => data,
-  } satisfies KyselyEntityDefinition;
+    toInsert: (data: Partial<Author>) => data,
+    toUpdate: (data: Partial<Author>) => data,
+  } satisfies SnadiKyselyEntityDefinition;
 
   const authorBooks = () => hasMany(authorDef, "id", bookDef, "author_id");
 
@@ -126,62 +126,66 @@ test("tests", async (t) => {
 
   // CREATE TEST DATA
 
+  const fromInsert = async <EntityDef extends ValidSnadiKyselyEntityDefinition<KyselyDB>>(def: EntityDef, insertResult: InsertResult) => {
+    return (await orm.getOne(def, qb => qb.where("id", "=", Number(insertResult.insertId) as any)))!;
+  };
+
   const createdAuthors = {
-    neil: await orm.create(authorDef, {
+    neil: await fromInsert(authorDef, await orm.insert(authorDef, {
       name: "Neil Gaiman",
-    }),
-    pratchett: await orm.create(authorDef, {
+    })),
+    pratchett: await fromInsert(authorDef, await orm.insert(authorDef, {
       name: "Terry Pratchett",
-    }),
+    })),
   };
 
   const createdBookstores = {
-    yeOldeBookShoppe: await orm.create(bookstoreDef, {
+    yeOldeBookShoppe: await fromInsert(bookstoreDef, await orm.insert(bookstoreDef, {
       name: "Ye Olde Book Shoppe",
-    }),
-    brigittesBooks: await orm.create(bookstoreDef, {
+    })),
+    brigittesBooks: await fromInsert(bookstoreDef, await orm.insert(bookstoreDef, {
       name: "Brigitte's Books",
-    }),
-    noBooks: await orm.create(bookstoreDef, {
+    })),
+    noBooks: await fromInsert(bookstoreDef, await orm.insert(bookstoreDef, {
       name: "No Books Store",
-    }),
+    })),
   };
 
   const createdBooks = {
-    fragileThings: await orm.create(bookDef, {
+    fragileThings: await fromInsert(bookDef, await orm.insert(bookDef, {
       author_id: createdAuthors.neil.id,
       bookstore_id: createdBookstores.brigittesBooks.id,
       title: "Fragile Things",
-    }),
-    theColourOfMagic: await orm.create(bookDef, {
+    })),
+    theColourOfMagic: await fromInsert(bookDef, await orm.insert(bookDef, {
       author_id: createdAuthors.pratchett.id,
       bookstore_id: createdBookstores.yeOldeBookShoppe.id,
       title: "The Colour of Magic",
-    }),
-    guardsGuards: await orm.create(bookDef, {
+    })),
+    guardsGuards: await fromInsert(bookDef, await orm.insert(bookDef, {
       author_id: createdAuthors.pratchett.id,
       bookstore_id: createdBookstores.brigittesBooks.id,
       title: "Guards! Guards!",
-    }),
-    theLastHero: await orm.create(bookDef, {
+    })),
+    theLastHero: await fromInsert(bookDef, await orm.insert(bookDef, {
       author_id: createdAuthors.pratchett.id,
       bookstore_id: createdBookstores.brigittesBooks.id,
       title: "The Last Hero",
-    }),
+    })),
   };
 
   const createdBookDetails = {
-    fragileThings: await orm.create(bookDetailsDef, {
+    fragileThings: await fromInsert(bookDetailsDef, await orm.insert(bookDetailsDef, {
       book_id: createdBooks.fragileThings.id,
       isbn: "0-06-051522-8",
-    }),
-    theColourOfMagic: await orm.create(bookDetailsDef, {
+    })),
+    theColourOfMagic: await fromInsert(bookDetailsDef, await orm.insert(bookDetailsDef, {
       book_id: createdBooks.theColourOfMagic.id,
       isbn: "0-86140-324-X",
-    }),
+    })),
   };
 
-  await t.test("orm.create()", async (t) => {
+  await t.test("orm.insert()", async (t) => {
     const authors = await orm.getAll(authorDef);
     assert.strictEqual(authors.length, Object.keys(createdAuthors).length);
 
